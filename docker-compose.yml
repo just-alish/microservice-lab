@@ -1,0 +1,69 @@
+version: '3.8'
+
+# Custom network with static subnet - fulfills "static IP containers" requirement
+networks:
+  microservice_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.100.0/24
+
+services:
+  # Reverse Proxy - handles routing and TLS
+  traefik:
+    image: traefik:v3.0
+    container_name: traefik
+    command:
+      # Enable Docker provider so Traefik reads container labels
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      # Define entry points for HTTP and HTTPS
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      # Redirect HTTP to HTTPS automatically
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      # Enable Traefik dashboard (optional, helps with debugging)
+      - "--api.dashboard=true"
+    ports:
+      - "8080:80"
+      - "8443:443"
+    volumes:
+      # Give Traefik access to Docker socket so it can discover services
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    networks:
+      microservice_net:
+        ipv4_address: 192.168.100.2
+    restart: unless-stopped
+
+  # Message Broker
+  rabbitmq:
+    image: rabbitmq:3.13-management  # Includes management UI plugin
+    container_name: rabbitmq
+    hostname: rabbitmq
+    environment:
+      # Default credentials - change these for security
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=admin123
+    ports:
+      # AMQP port - exposed to host for your producer/consumer apps
+      - "5672:5672"
+      # Management UI - only exposed to host (not routed through Traefik in this minimal setup)
+      - "15672:15672"
+    volumes:
+      # Persist RabbitMQ data across container restarts
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      microservice_net:
+        # Static IP - fulfills requirement explicitly
+        ipv4_address: 192.168.100.10
+    restart: unless-stopped
+    healthcheck:
+      # Ensure RabbitMQ is fully ready before dependent services start
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  rabbitmq_data:
