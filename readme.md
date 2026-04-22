@@ -2,7 +2,7 @@
 
 ## 1 General information
 
-Message queuing via RabbitMQ & containerization via Docker Compose, mandatory TLS & proxying via Traefik with a mandatory requirement of static IP containers in networks, Docker routing.
+Message queuing via RabbitMQ & containerisation via Docker Compose, mandatory TLS & proxying via Traefik with a mandatory requirement of static IP containers in networks, Docker routing.
 
 ## 2 Architecture overview
 
