@@ -6,7 +6,7 @@ Message queuing via RabbitMQ & containerisation via Docker Compose, mandatory TL
 
 ## 2 Architecture overview
 
-The system consists of four containerized services:
+The system consists of four containerised services:
 - **Traefik**: Reverse proxy handling HTTPS/TLS termination and routing.
 - **Producer**: Node.js/Fastify API that accepts HTTP requests and publishes messages to RabbitMQ.
 - **Consumer**: Node.js background worker that consumes messages from RabbitMQ and logs them.
@@ -59,7 +59,7 @@ docker logs -f consumer
 | Requirement          | How It's Met                                                                    |
 | :------------------- | :------------------------------------------------------------------------------ |
 | **Message Queuing**  | RabbitMQ container with `tasks` queue.                                          |
-| **Containerization** | Docker Compose orchestrates all services.                                       |
+| **Containerisation** | Docker Compose orchestrates all services.                                       |
 | **TLS**              | Traefik configured with self-signed certificate.                                |
 | **Proxying**         | Traefik routes `producer.localhost` to Producer container.                      |
 | **Static IPs**       | Custom network `microservice_net` with defined `ipv4_address` for each service. |
