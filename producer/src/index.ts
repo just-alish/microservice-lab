@@ -1,6 +1,5 @@
 import amqp from 'amqplib'
 import Fastify from 'fastify'
-
 // ## Configuration
 // ### RabbitMQ configuration
 const PORT = 3000;
@@ -71,7 +70,7 @@ async function start(): Promise<void> {
     await connectRabbitMQ();
 // ### Start HTTP server
     await fastify.listen({ port: PORT, host: '0.0.0.0' });
-    fastify.log.info(`🚀 Producer server listening on port ${PORT}`);
+    fastify.log.info(`Producer server listening on port ${PORT}`);
   } catch (error) {
     fastify.log.error(error, 'Failed to start server:');
     process.exit(1);
@@ -92,6 +91,5 @@ async function shutdown(): Promise<void> {
 
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
-
 // ## Entry point
 start();

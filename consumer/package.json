@@ -1,5 +1,5 @@
 {
-  "name": "producer",
+  "name": "consumer",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
@@ -13,8 +13,7 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
-    "amqplib": "^1.0.3",
-    "fastify": "^5.8.5"
+    "amqplib": "^1.0.3"
   },
   "devDependencies": {
     "@types/amqplib": "^0.10.8",
