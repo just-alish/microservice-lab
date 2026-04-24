@@ -1,44 +1,45 @@
-# 1. Mandatory requirement: Static IP containers in networks
+# 1st requirement: static IP containers in networks.
 networks:
   lab_network:
     driver: bridge
     ipam:
       config:
-        # Defining a specific /24 subnet for our static IPs
         - subnet: 10.5.0.0/24
           gateway: 10.5.0.1
 
 services:
-  # -- EDGE PROXY --
+  # edge proxy.
   traefik:
     image: traefik:v3.6.1
     container_name: traefik
     security_opt:
       - label=disable
     command:
-      - "--api.insecure=true" # Enables the Traefik dashboard on :8080
+      - "--api.insecure=true" # enables the Traefik dashboard on :8080.
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
-      # Defining entrypoints for HTTP and HTTPS
+      # defining entrypoints for HTTP and HTTPS.
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
     ports:
       - "80:80"
       - "443:443"
-      - "8080:8080" # Dashboard port (for lab verification)
+      - "8080:8080" # dashboard port.
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       lab_network:
         ipv4_address: 10.5.0.2
 
-  # -- MESSAGE BROKER --
+  # RabbitMQ broker.
   rabbitmq:
     image: rabbitmq:3-management-alpine
     container_name: rabbitmq
     ports:
-      - "5672:5672"   # AMQP port
-      - "15672:15672" # Management UI port (great for showing the Prof)
+      - "5672:5672"
+      - "15672:15672"
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
@@ -46,32 +47,32 @@ services:
       lab_network:
         ipv4_address: 10.5.0.3
 
-  # -- PRODUCER (API) --
+  # producer (API).
   producer:
     build:
       context: ./producer
       dockerfile: Dockerfile
     container_name: producer
     environment:
-      # Injecting the static IP of RabbitMQ
+      # injecting the static IP of RabbitMQ.
       - RABBITMQ_URL=amqp://guest:guest@10.5.0.3:5672
     depends_on:
       - rabbitmq
     labels:
-      # 2. Mandatory requirement: Proxying via Traefik & Docker routing
+      # 2nd requirement: proxying via Traefik & Docker routing.
       - "traefik.enable=true"
-      # Route traffic matching this host to the producer
+      # Route traffic matching this host to the producer.
       - "traefik.http.routers.producer.rule=Host(`api.microservicelab.localhost`)"
-      # 3. Mandatory requirement: Mandatory TLS
+      # 3rd requirement: TLS.
       - "traefik.http.routers.producer.entrypoints=websecure"
       - "traefik.http.routers.producer.tls=true"
-      # Explicitly tell Traefik which port the container listens on (from your Fastify code)
+      # explicitly tell Traefik which port the container listens on.
       - "traefik.http.services.producer.loadbalancer.server.port=3000"
     networks:
       lab_network:
         ipv4_address: 10.5.0.4
 
-  # -- CONSUMER (WORKER) --
+  # consumer (WORKER).
   consumer:
     build:
       context: ./consumer
