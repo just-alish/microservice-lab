@@ -1,69 +1,84 @@
-version: '3.8'
-
-# Custom network with static subnet - fulfills "static IP containers" requirement
+# 1. Mandatory requirement: Static IP containers in networks
 networks:
-  microservice_net:
+  lab_network:
     driver: bridge
     ipam:
       config:
-        - subnet: 192.168.100.0/24
+        # Defining a specific /24 subnet for our static IPs
+        - subnet: 10.5.0.0/24
+          gateway: 10.5.0.1
 
 services:
-  # Reverse Proxy - handles routing and TLS
+  # -- EDGE PROXY --
   traefik:
     image: traefik:v3.0
     container_name: traefik
     command:
-      # Enable Docker provider so Traefik reads container labels
+      - "--api.insecure=true" # Enables the Traefik dashboard on :8080
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
-      # Define entry points for HTTP and HTTPS
+      # Defining entrypoints for HTTP and HTTPS
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
-      # Redirect HTTP to HTTPS automatically
-      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
-      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
-      # Enable Traefik dashboard (optional, helps with debugging)
-      - "--api.dashboard=true"
     ports:
-      - "8080:80"
-      - "8443:443"
+      - "80:80"
+      - "443:443"
+      - "8080:8080" # Dashboard port (for lab verification)
     volumes:
-      # Give Traefik access to Docker socket so it can discover services
-      - "/var/run/docker.sock:/var/run/docker.sock"
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
-      microservice_net:
-        ipv4_address: 192.168.100.2
-    restart: unless-stopped
+      lab_network:
+        ipv4_address: 10.5.0.2
 
-  # Message Broker
+  # -- MESSAGE BROKER --
   rabbitmq:
-    image: rabbitmq:3.13-management  # Includes management UI plugin
+    image: rabbitmq:3-management-alpine
     container_name: rabbitmq
-    hostname: rabbitmq
-    environment:
-      # Default credentials - change these for security
-      - RABBITMQ_DEFAULT_USER=admin
-      - RABBITMQ_DEFAULT_PASS=admin123
     ports:
-      # AMQP port - exposed to host for your producer/consumer apps
-      - "5672:5672"
-      # Management UI - only exposed to host (not routed through Traefik in this minimal setup)
-      - "15672:15672"
-    volumes:
-      # Persist RabbitMQ data across container restarts
-      - rabbitmq_data:/var/lib/rabbitmq
+      - "5672:5672"   # AMQP port
+      - "15672:15672" # Management UI port (great for showing the Prof)
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
     networks:
-      microservice_net:
-        # Static IP - fulfills requirement explicitly
-        ipv4_address: 192.168.100.10
-    restart: unless-stopped
-    healthcheck:
-      # Ensure RabbitMQ is fully ready before dependent services start
-      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      lab_network:
+        ipv4_address: 10.5.0.3
 
-volumes:
-  rabbitmq_data:
+  # -- PRODUCER (API) --
+  producer:
+    build:
+      context: ./producer
+      dockerfile: Dockerfile
+    container_name: producer
+    environment:
+      # Injecting the static IP of RabbitMQ
+      - RABBITMQ_URL=amqp://guest:guest@10.5.0.3:5672
+    depends_on:
+      - rabbitmq
+    labels:
+      # 2. Mandatory requirement: Proxying via Traefik & Docker routing
+      - "traefik.enable=true"
+      # Route traffic matching this host to the producer
+      - "traefik.http.routers.producer.rule=Host(`api.microservicelab.localhost`)"
+      # 3. Mandatory requirement: Mandatory TLS
+      - "traefik.http.routers.producer.entrypoints=websecure"
+      - "traefik.http.routers.producer.tls=true"
+      # Explicitly tell Traefik which port the container listens on (from your Fastify code)
+      - "traefik.http.services.producer.loadbalancer.server.port=3000"
+    networks:
+      lab_network:
+        ipv4_address: 10.5.0.4
+
+  # -- CONSUMER (WORKER) --
+  consumer:
+    build:
+      context: ./consumer
+      dockerfile: Dockerfile
+    container_name: consumer
+    environment:
+      - RABBITMQ_URL=amqp://guest:guest@10.5.0.3:5672
+    depends_on:
+      - rabbitmq
+    networks:
+      lab_network:
+        ipv4_address: 10.5.0.5

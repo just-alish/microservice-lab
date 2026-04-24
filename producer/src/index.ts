@@ -1,6 +1,7 @@
+// microservice-lab/producer/src/index.ts
 import amqp from 'amqplib'
 import Fastify from 'fastify'
-// ## Configuration
+// ## configuration
 // ### RabbitMQ configuration
 const PORT = 3000;
 const RABBITMQ_URL = process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost:5672';
@@ -13,20 +14,40 @@ const fastify = Fastify({
 let channel: amqp.Channel;
 
 async function connectRabbitMQ(): Promise<void> {
-  try {
-    const connection = await amqp.connect(RABBITMQ_URL);
-    channel = await connection.createChannel();
-    await channel.assertQueue(QUEUE_NAME, { durable: true });
+  let retries = 5
+  while (retries) {
+    try {
+      const connection = await amqp.connect(RABBITMQ_URL);
+      channel = await connection.createChannel();
+      await channel.assertQueue(QUEUE_NAME, { durable: true });
 
-    fastify.log.info(`Connected to RabbitMQ. Queue "${QUEUE_NAME}" ready.`);
-  } catch (error) {
-    fastify.log.error(error, 'Failed to connect to RabbitMQ:');
+      fastify.log.info(`Connected to RabbitMQ. Queue "${QUEUE_NAME}" ready.`);
 
-    process.exit(1);
+      return; // god.
+
+    } catch (error) {
+      retries -= 1;
+      fastify.log.error(error, `Failed to connect to RabbitMQ. Retries left: ${retries}`);
+      if (retries === 0) {
+        process.exit(1);
+      }
+
+      await new Promise(res => setTimeout(res, 5000));
+    }
   }
 }
-// ## HTTP 
-fastify.get('/health', async () => {
+// ## HTTP
+// ### health check.
+fastify.get('/health', async (request, reply) => {
+  const isRabbitConnected = channel && channel.connection;
+  
+  if (!isRabbitConnected) {
+    return reply.status(503).send({ 
+      status: 'unhealthy', 
+      reason: 'RabbitMQ connection lost' 
+    });
+  }
+
   return { status: 'ok', service: 'producer' };
 });
 
