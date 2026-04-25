@@ -21,6 +21,7 @@ services:
       # defining entrypoints for HTTP and HTTPS.
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
+      # 2rd requirement: TLS.
       - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
       - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
     ports:
@@ -59,11 +60,11 @@ services:
     depends_on:
       - rabbitmq
     labels:
-      # 2nd requirement: proxying via Traefik & Docker routing.
+      # 3rd requirement: proxying via Traefik & Docker routing.
       - "traefik.enable=true"
-      # Route traffic matching this host to the producer.
+      # route traffic matching this host to the producer.
       - "traefik.http.routers.producer.rule=Host(`api.microservicelab.localhost`)"
-      # 3rd requirement: TLS.
+      # 2nd requirement: TLS.
       - "traefik.http.routers.producer.entrypoints=websecure"
       - "traefik.http.routers.producer.tls=true"
       # explicitly tell Traefik which port the container listens on.
